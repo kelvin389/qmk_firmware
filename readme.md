@@ -1,4 +1,5 @@
 changes for v3 max ansi via:
+
     - remap caps key to rctrl; can still access with fn+caps
     - shuffle right side modifier keys to have 2 fn keys and no windows/menu key
     - increased emulated eeprom size from 2048 to 8192 to support more layers/macros
