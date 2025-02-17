@@ -22,7 +22,8 @@
 // socd cleaning
 ////////////////////////////////////////////////////////////////
 enum custom_keycodes {
-    SOCDTOG = SAFE_RANGE
+    SOCDTOG = SAFE_RANGE,
+    VOLMACRO
 };
 
 socd_cleaner_t socd_v = {{KC_W, KC_S}, SOCD_CLEANER_LAST};
@@ -56,13 +57,12 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         _______,  _______,  _______,                                _______,                                _______,  _______,  _______,    _______,    _______,  _______,  _______),
 
     [WIN_BASE] = LAYOUT_tkl_ansi(
-        KC_ESC,   KC_F1,    KC_F2,    KC_F3,    KC_F4,    KC_F5,    KC_F6,    KC_F7,    KC_F8,    KC_F9,    KC_F10,   KC_F11,   KC_F12,         KC_MUTE,    KC_PSCR,  KC_CTANA, RGB_MOD,
-        KC_GRV,   KC_1,     KC_2,     KC_3,     KC_4,     KC_5,     KC_6,     KC_7,     KC_8,     KC_9,     KC_0,     KC_MINS,  KC_EQL,         KC_BSPC,    KC_INS,   KC_HOME,  KC_PGUP,
-        KC_TAB,   KC_Q,     KC_W,     KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,     KC_LBRC,  KC_RBRC,        KC_BSLS,    KC_DEL,   KC_END,   KC_PGDN,
         KC_ESC,   KC_F1,    KC_F2,    KC_F3,    KC_F4,    KC_F5,    KC_F6,    KC_F7,    KC_F8,    KC_F9,    KC_F10,   KC_F11,   KC_F12,         VOLMACRO,    KC_PSCR,  KC_CTANA, RGB_MOD,
+        KC_GRV,   KC_1,     KC_2,     KC_3,     KC_4,     KC_5,     KC_6,     KC_7,     KC_8,     KC_9,     KC_0,     KC_MINS,  KC_EQL,         KC_BSPC,     KC_INS,   KC_HOME,  KC_PGUP,
+        KC_TAB,   KC_Q,     KC_W,     KC_E,     KC_R,     KC_T,     KC_Y,     KC_U,     KC_I,     KC_O,     KC_P,     KC_LBRC,  KC_RBRC,        KC_BSLS,     KC_DEL,   KC_END,   KC_PGDN,
         KC_RCTL,  KC_A,     KC_S,     KC_D,     KC_F,     KC_G,     KC_H,     KC_J,     KC_K,     KC_L,     KC_SCLN,  KC_QUOT,                  KC_ENT,
-        KC_LSFT,            KC_Z,     KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,   KC_SLSH,                  KC_RSFT,              KC_UP,
-        KC_LCTL,  KC_LCMD,  KC_LALT,                                KC_SPC,                                 KC_RALT,  MO(WIN_FN),  MO(WIN_FN2), KC_RCTL,    KC_LEFT,  KC_DOWN,  KC_RGHT),
+        KC_LSFT,            KC_Z,     KC_X,     KC_C,     KC_V,     KC_B,     KC_N,     KC_M,     KC_COMM,  KC_DOT,   KC_SLSH,                  KC_RSFT,               KC_UP,
+        KC_LCTL,  KC_LCMD,  KC_LALT,                                KC_SPC,                                 KC_RALT,  MO(WIN_FN),  MO(WIN_FN2), KC_RCTL,     KC_LEFT,  KC_DOWN,  KC_RGHT),
 
     [WIN_FN] = LAYOUT_tkl_ansi(
         XXXXXXX,  KC_BRID,  KC_BRIU,  KC_TASK,  KC_FILE,  RGB_VAD,  RGB_VAI,  KC_MPRV,  KC_MPLY,  KC_MNXT,  KC_MUTE,  KC_VOLD,  KC_VOLU,    _______,    XXXXXXX,  XXXXXXX,  RGB_TOG,
@@ -145,16 +145,81 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 ////////////////////////////////////////////////////////////////
 // change lighting mode to indicate a macro is being recorded
 ////////////////////////////////////////////////////////////////
-uint8_t prevMode = 0;
 
+////////////////////////////////////////////////////////////////////
+// change rgb mode based on current layer (used for override layers)
+// and when a macro is being recorded
+////////////////////////////////////////////////////////////////////
+uint8_t base_mode = 0;
+uint8_t base_spd = 0;
+
+const uint8_t override1_mode = RGB_MATRIX_CYCLE_PINWHEEL;
+const uint8_t override1_spd = 25;
+const uint8_t override2_mode = RGB_MATRIX_CYCLE_SPIRAL;
+const uint8_t override2_spd = 30;
+const uint8_t macro_mode = RGB_MATRIX_BREATHING;
+const uint8_t macro_spd = 120;
+
+bool recording_macro = false;
+
+// pull mode and speed on keyboard boot to get base values.
+// this means that if the default rgb is ever changed in
+// via, then a keyboard reboot will let that mode be the base mode
+// rather than needing to edit and reflash firmware
+void keyboard_post_init_user(void) {
+    base_mode = rgb_matrix_get_mode();
+    base_spd = rgb_matrix_get_speed();
+}
+
+layer_state_t layer_state_set_user(layer_state_t state)
+{
+    // dont change rgb while recording macro and switching layers.
+    // specifically for case where fn2 must be held to switch to
+    // a different layer where the record macro button is
+    // but then letting go of fn2 switches back to base layer
+    // which would cause the rgb change triggered by recording macro
+    // to immediately be overwritten
+    if (recording_macro) return state;
+
+    // set rgb mode based on highest active layer.
+    // override layers are configured higher than fn layers so
+    // they will take precedence.
+    // use noeeprom because these are temporary effects
+    // so theres no need to update the saved values
+    switch (get_highest_layer(state)) {
+        case WIN_OVERRIDE:
+            rgb_matrix_mode_noeeprom(override1_mode);
+            rgb_matrix_set_speed_noeeprom(override1_spd);
+            break;
+        case WIN_OVERRIDE2:
+            rgb_matrix_mode_noeeprom(override2_mode);
+            rgb_matrix_set_speed_noeeprom(override2_spd);
+            break;
+        default:
+            // using noeeprom here also prevents new rgb settings from being 
+            // overwritten with the original rgb settings if you forget to reboot
+            // then use an override layer
+            rgb_matrix_mode_noeeprom(base_mode);
+            rgb_matrix_set_speed_noeeprom(base_spd);
+    }
+    return state;
+}
+
+// change rgb while recording macro
 void dynamic_macro_record_start_user(int8_t direction)
 {
-    prevMode = rgb_matrix_get_mode();
-    rgb_matrix_mode(RGB_MATRIX_BREATHING);
+    rgb_matrix_mode_noeeprom(macro_mode);
+    rgb_matrix_set_speed_noeeprom(macro_spd);
+
+    recording_macro = true;
 }
 
 void dynamic_macro_record_end_user(int8_t direction)
 {
-    rgb_matrix_mode(prevMode);
-}
+    // return to base because macro recording can only be done on the default (base) layer
+    // (for some reason)
+    rgb_matrix_mode_noeeprom(base_mode);
+    rgb_matrix_set_speed_noeeprom(base_spd);
 
+    recording_macro = false;
+}
