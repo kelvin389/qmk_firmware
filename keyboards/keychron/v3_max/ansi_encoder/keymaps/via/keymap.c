@@ -19,6 +19,17 @@
 #include "features/socd_cleaner.h"
 #include "color.h"
 
+// save settings to eeprom so they persist between power cycles
+typedef union {
+    uint32_t raw;
+    struct {
+        bool socd_enabled :1;
+        bool nkro_enabled :1;
+    };
+} user_config_t;
+
+user_config_t user_config;
+
 ////////////////////////////////////////////////////////////////
 // socd cleaning
 ////////////////////////////////////////////////////////////////
@@ -72,7 +83,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         XXXXXXX,  BT_HST1,  BT_HST2,  BT_HST3,  P2P4G,    XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX,
         RGB_TOG,  RGB_MOD,  RGB_VAI,  RGB_HUI,  RGB_SAI,  RGB_SPI,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX,
         CAPSTOG,  RGB_RMOD, RGB_VAD,  RGB_HUD,  RGB_SAD,  RGB_SPD,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,
-        XXXXXXX,            XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  BAT_LVL,  NKROTOG,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,              XXXXXXX,
+        XXXXXXX,            XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  BAT_LVL,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,              XXXXXXX,
         XXXXXXX,  XXXXXXX,  XXXXXXX,                                XXXXXXX,                                XXXXXXX,  MO(WIN_FN),  MO(WIN_FN2),    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX),
 
     [WIN_FN2] = LAYOUT_tkl_ansi(
@@ -80,7 +91,7 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         XXXXXXX,  DM_PLY1,  DM_PLY2,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX,
         XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX,
         CAPSTOG,  XXXXXXX,  SOCDTOG,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,
-        XXXXXXX,            XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,              XXXXXXX,
+        XXXXXXX,            XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  NKROTOG,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,              XXXXXXX,
         XXXXXXX,  XXXXXXX,  XXXXXXX,                                XXXXXXX,                                XXXXXXX,  MO(WIN_FN),  MO(WIN_FN2),    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX),
 
     [WIN_OVERRIDE] = LAYOUT_tkl_ansi(
@@ -126,15 +137,19 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
     switch (keycode) {
         case SOCDTOG:
             if (record->event.pressed) {
-                HSV prev_hsv = rgb_matrix_get_hsv();
+                // update value in keyboard
                 socd_cleaner_enabled = !socd_cleaner_enabled;
+                // update value in eeprom
+                user_config.socd_enabled = socd_cleaner_enabled;
+                eeconfig_update_user(user_config.raw);
 
+                // show color
+                HSV prev_hsv = rgb_matrix_get_hsv();
                 if (socd_cleaner_enabled) { 
                     rgb_matrix_sethsv_noeeprom(on_hue, prev_hsv.s, prev_hsv.v);
                 } else {
                     rgb_matrix_sethsv_noeeprom(off_hue, prev_hsv.s, prev_hsv.v);
                 }
-
                 rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
             }
             return false;
@@ -152,34 +167,37 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
             return false;
         case NKROTOG:
             if (record->event.pressed) {
-                HSV prev_hsv = rgb_matrix_get_hsv();
+                // update value in keyboard
                 keymap_config.nkro = !keymap_config.nkro;
+                // update value in eeprom
+                user_config.nkro_enabled = keymap_config.nkro;
+                eeconfig_update_user(user_config.raw);
 
+                // show color
+                HSV prev_hsv = rgb_matrix_get_hsv();
                 if (keymap_config.nkro) { 
                     rgb_matrix_sethsv_noeeprom(on_hue, prev_hsv.s, prev_hsv.v);
                 } else {
                     rgb_matrix_sethsv_noeeprom(off_hue, prev_hsv.s, prev_hsv.v);
                 }
-
                 rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
             }
             return false;
         case CAPSTOG:
             if (record->event.pressed) {
-                HSV prev_hsv = rgb_matrix_get_hsv();
-
                 // we store the previous caps state then programatically invert it to get the new state.
                 // this is done because tap_code may not immediately flip the caps state and thus the
-                // following if statement may receive incorrect information and show the wrong color
+                // following if statement may receive the outdated capslock state
                 bool prev_caps_state = host_keyboard_led_state().caps_lock;
                 tap_code(KC_CAPS);
 
+                // show color
+                HSV prev_hsv = rgb_matrix_get_hsv();
                 if (!prev_caps_state) { 
                     rgb_matrix_sethsv_noeeprom(on_hue, prev_hsv.s, prev_hsv.v);
                 } else {
                     rgb_matrix_sethsv_noeeprom(off_hue, prev_hsv.s, prev_hsv.v);
                 }
-
                 rgb_matrix_mode_noeeprom(RGB_MATRIX_SOLID_COLOR);
             }
             return false;
@@ -191,10 +209,6 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
 
     return true;
 }
-
-////////////////////////////////////////////////////////////////
-// change lighting mode to indicate a macro is being recorded
-////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////
 // change rgb mode based on current layer (used for override layers)
@@ -219,6 +233,25 @@ bool recording_macro = false;
 void keyboard_post_init_user(void) {
     base_mode = rgb_matrix_get_mode();
     base_spd = rgb_matrix_get_speed();
+
+    // enable/disable socd and nkro based on settings saved in eeprom
+    user_config.raw = eeconfig_read_user();
+
+    socd_cleaner_enabled = user_config.socd_enabled;
+    keymap_config.nkro = user_config.nkro_enabled;
+}
+
+// init eeprom when its reset
+void eeconfig_init_user(void) {
+    // write config
+    user_config.raw = 0;
+    user_config.socd_enabled = true;
+    user_config.nkro_enabled = false;
+    eeconfig_update_user(user_config.raw);
+
+    // set actual values in keyboard
+    socd_cleaner_enabled = true;
+    keymap_config.nkro = false;
 }
 
 layer_state_t layer_state_set_user(layer_state_t state)
@@ -254,6 +287,10 @@ layer_state_t layer_state_set_user(layer_state_t state)
     }
     return state;
 }
+
+////////////////////////////////////////////////////////////////
+// change lighting mode to indicate a macro is being recorded
+////////////////////////////////////////////////////////////////
 
 // change rgb while recording macro
 void dynamic_macro_record_start_user(int8_t direction)
