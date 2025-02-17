@@ -79,8 +79,8 @@ const uint16_t PROGMEM keymaps[][MATRIX_ROWS][MATRIX_COLS] = {
         XXXXXXX,  DM_REC1,  DM_REC2,  XXXXXXX,  DM_RSTP,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  TO(WIN_BASE),  XXXXXXX,  TO(WIN_OVERRIDE),  TO(WIN_OVERRIDE2),    _______,    XXXXXXX,  XXXXXXX,  XXXXXXX,
         XXXXXXX,  DM_PLY1,  DM_PLY2,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX,
         XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX,
-        _______,  XXXXXXX,  SOCDTOG,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,
-        XXXXXXX,            XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  _______,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,              XXXXXXX,
+        CAPSTOG,  XXXXXXX,  SOCDTOG,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,
+        XXXXXXX,            XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,  XXXXXXX,              XXXXXXX,              XXXXXXX,
         XXXXXXX,  XXXXXXX,  XXXXXXX,                                XXXXXXX,                                XXXXXXX,  MO(WIN_FN),  MO(WIN_FN2),    XXXXXXX,    XXXXXXX,  XXXXXXX,  XXXXXXX),
 
     [WIN_OVERRIDE] = LAYOUT_tkl_ansi(
@@ -167,9 +167,14 @@ bool process_record_user(uint16_t keycode, keyrecord_t *record) {
         case CAPSTOG:
             if (record->event.pressed) {
                 HSV prev_hsv = rgb_matrix_get_hsv();
+
+                // we store the previous caps state then programatically invert it to get the new state.
+                // this is done because tap_code may not immediately flip the caps state and thus the
+                // following if statement may receive incorrect information and show the wrong color
+                bool prev_caps_state = host_keyboard_led_state().caps_lock;
                 tap_code(KC_CAPS);
 
-                if (host_keyboard_led_state().caps_lock) { 
+                if (!prev_caps_state) { 
                     rgb_matrix_sethsv_noeeprom(on_hue, prev_hsv.s, prev_hsv.v);
                 } else {
                     rgb_matrix_sethsv_noeeprom(off_hue, prev_hsv.s, prev_hsv.v);
