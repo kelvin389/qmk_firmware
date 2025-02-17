@@ -4,9 +4,11 @@ changes for v3 max ansi via:
     - shuffle right side modifier keys to have 2 fn keys and no windows/menu key
     - increased emulated eeprom size from 2048 to 8192 to support more layers/macros
     - 7 layers instead of 4; 1 layer is an extra fn layer, 2 layers are toggleable "override" layers that can be used to change the function of a few keys relative to the base layout. can be activated using fn2+f11/12 and deactivated using fn2+f9.
+    - different rgb when override layers are enabled
     - capsword on l+r shift press
     - socd cleaning (toggle with fn2+s)
     - dynamic macros (fn2+f1/f2 to record, fn2+f4 to stop, fn2+1/2 to playback); change to breathing color mode when recording
+	- show socd/nkro/caps status on rgb backlight when toggling them
 
 
 # Quantum Mechanical Keyboard Firmware
